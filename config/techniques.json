@@ -1,0 +1,80 @@
+{
+  "techniques": [
+    {
+      "id": "cross-domain-transfer",
+      "name": "Cross-Domain Transfer",
+      "description": "Borrow a mechanism from an unrelated field and apply it to the target domain",
+      "promptTemplate": "Generate {{count}} software idea(s) for the domain '{{domain}}' using cross-domain transfer. Pick a mechanism from a completely unrelated field (biology, logistics, finance, game design, etc.) and explain how that mechanism, applied to {{domain}}, produces a novel software product. {{#problemArea}}Focus on the problem area: {{problemArea}}.{{/problemArea}} Each idea must be software-only — no hardware, manufacturing, or lab work. Output each idea as a JSON object with all required fields.",
+      "requiredOutputFields": [
+        "title",
+        "oneLiner",
+        "problem",
+        "solution",
+        "whyNow",
+        "targetUser",
+        "constraints",
+        "risks",
+        "mvpSteps",
+        "domain",
+        "tags"
+      ]
+    },
+    {
+      "id": "forced-analogy",
+      "name": "Forced Analogy",
+      "description": "Force an analogy between a random object/concept and the target domain",
+      "promptTemplate": "Generate {{count}} software idea(s) for the domain '{{domain}}' using forced analogy. Pick a random object or concept (a kitchen appliance, a sports rule, a musical instrument) and force an analogy between it and {{domain}}. What software product emerges from that analogy? {{#problemArea}}Focus on the problem area: {{problemArea}}.{{/problemArea}} Each idea must be software-only — no hardware, manufacturing, or lab work. Output each idea as a JSON object with all required fields.",
+      "requiredOutputFields": [
+        "title",
+        "oneLiner",
+        "problem",
+        "solution",
+        "whyNow",
+        "targetUser",
+        "constraints",
+        "risks",
+        "mvpSteps",
+        "domain",
+        "tags"
+      ]
+    },
+    {
+      "id": "contradiction-search",
+      "name": "Contradiction Search",
+      "description": "Find the biggest contradiction or unsolved tension in the domain and resolve it",
+      "promptTemplate": "Generate {{count}} software idea(s) for the domain '{{domain}}' using contradiction search. Identify the biggest unsolved contradiction or tension in {{domain}} — two things that both seem necessary but conflict. Design a software product that resolves that contradiction. {{#problemArea}}Focus on the problem area: {{problemArea}}.{{/problemArea}} Each idea must be software-only — no hardware, manufacturing, or lab work. Output each idea as a JSON object with all required fields.",
+      "requiredOutputFields": [
+        "title",
+        "oneLiner",
+        "problem",
+        "solution",
+        "whyNow",
+        "targetUser",
+        "constraints",
+        "risks",
+        "mvpSteps",
+        "domain",
+        "tags"
+      ]
+    },
+    {
+      "id": "morphological-matrix",
+      "name": "Morphological Matrix",
+      "description": "Enumerate key dimensions and combine unusual dimension values",
+      "promptTemplate": "Generate {{count}} software idea(s) for the domain '{{domain}}' using a morphological matrix. List 3-4 key dimensions of solutions in {{domain}} (e.g., delivery method, user type, data source, interaction model). Pick an unusual combination of values across dimensions. Design a software product from that combination. {{#problemArea}}Focus on the problem area: {{problemArea}}.{{/problemArea}} Each idea must be software-only — no hardware, manufacturing, or lab work. Output each idea as a JSON object with all required fields.",
+      "requiredOutputFields": [
+        "title",
+        "oneLiner",
+        "problem",
+        "solution",
+        "whyNow",
+        "targetUser",
+        "constraints",
+        "risks",
+        "mvpSteps",
+        "domain",
+        "tags"
+      ]
+    }
+  ]
+}

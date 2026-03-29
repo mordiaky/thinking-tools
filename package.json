@@ -1,0 +1,29 @@
+{
+  "name": "thinking-tools-mcp",
+  "version": "0.1.0",
+  "description": "Unified MCP server suite for cognitive augmentation — idea lab, hypothesis tracking, decision matrices, mental models, and more",
+  "type": "module",
+  "main": "build/server.js",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "build": "tsc",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "test": "vitest"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "better-sqlite3": "^11.9.1",
+    "drizzle-orm": "^0.45.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.5.0",
+    "drizzle-kit": "^0.31.10",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.1"
+  }
+}

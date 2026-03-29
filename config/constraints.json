@@ -1,0 +1,34 @@
+{
+  "softwareOnly": {
+    "description": "All ideas must be implementable entirely in software. No hardware, manufacturing, physical products, or lab work.",
+    "rejectionCriteria": [
+      "Requires custom hardware or physical device",
+      "Requires manufacturing or supply chain",
+      "Requires laboratory experiments or wet lab work",
+      "Requires physical installation or construction",
+      "Depends on sensors, robots, or IoT hardware not already commodity",
+      "Requires custom electronics, PCBs, or embedded firmware",
+      "Requires physical material handling, logistics, or warehousing operations"
+    ],
+    "examples": {
+      "allowed": [
+        "SaaS platforms",
+        "CLI tools",
+        "Browser extensions",
+        "Mobile apps",
+        "APIs and integrations",
+        "Developer tools and IDEs",
+        "Data pipelines and analytics platforms",
+        "AI/ML software applications",
+        "Marketplace platforms"
+      ],
+      "rejected": [
+        "Smart home hardware requiring custom circuit boards",
+        "Custom PCB design tool output that requires manufacturing",
+        "Lab equipment automation requiring non-commodity sensors",
+        "Physical product personalization requiring manufacturing line",
+        "Robotics requiring custom hardware components"
+      ]
+    }
+  }
+}

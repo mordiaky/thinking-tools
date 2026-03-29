@@ -1,0 +1,78 @@
+{
+  "weights": {
+    "novelty": 0.25,
+    "usefulness": 0.25,
+    "feasibility": 0.20,
+    "testability": 0.15,
+    "speedToMvp": 0.10,
+    "defensibility": 0.05
+  },
+  "thresholds": {
+    "feasibility": 7,
+    "usefulness": 7,
+    "novelty": 6,
+    "composite": 6.5
+  },
+  "clarityGate": {
+    "minimumScore": 5,
+    "includedInComposite": false
+  },
+  "anchors": {
+    "novelty": {
+      "9-10": "No product in any vertical solves this problem in this way — web search returns zero direct competitors",
+      "7-8": "Competitors exist but have fundamentally different approaches or serve different user segments",
+      "5-6": "A few direct competitors exist but have clear gaps this idea exploits",
+      "3-4": "This idea is a feature of an existing product, not a standalone product",
+      "1-2": "Thin wrapper over an existing product (GPT wrapper, Stripe dashboard clone)",
+      "0": "This is an existing product described differently"
+    },
+    "usefulness": {
+      "9-10": "Eliminates a painful manual process that affects many developers/teams daily",
+      "7-8": "Meaningfully speeds up a real task; users would pay for it",
+      "5-6": "Nice-to-have; users would use it if free but probably not pay",
+      "3-4": "Marginal improvement over existing workflow",
+      "1-2": "Solves a problem most people don't have",
+      "0": "No real use case"
+    },
+    "feasibility": {
+      "9-10": "Core built with 3-5 standard npm packages; no novel algorithms; works locally",
+      "7-8": "Requires one non-trivial integration (one external API, one ML model) but well-documented",
+      "5-6": "Requires two complex integrations or a non-standard infrastructure component",
+      "3-4": "Requires specialized knowledge or > 6 months of development",
+      "1-2": "Requires team of 3+ or research-level ML",
+      "0": "Not feasible without hardware/lab/manufacturing"
+    },
+    "testability": {
+      "9-10": "Single binary metric: task completion rate, latency, error rate",
+      "7-8": "2-3 clear metrics; easy to instrument",
+      "5-6": "Success is measurable but requires qualitative user feedback alongside metrics",
+      "3-4": "Success is hard to define; fuzzy outcomes",
+      "1-2": "Long feedback loops (months to know if it worked)",
+      "0": "No way to measure success"
+    },
+    "speedToMvp": {
+      "9-10": "Scriptable CLI or single-page demo in < 1 week",
+      "7-8": "Working prototype in 2-4 weeks",
+      "5-6": "1-2 month MVP with a real user testing it",
+      "3-4": "3-6 months before real validation",
+      "1-2": "6+ months before any real user feedback",
+      "0": "No path to an MVP that validates the core hypothesis"
+    },
+    "defensibility": {
+      "9-10": "Network effects, proprietary data, or a moat that requires years to build",
+      "7-8": "Developer workflow lock-in, integration network, or unique domain expertise",
+      "5-6": "First-mover advantage + community, but copyable with enough effort",
+      "3-4": "Commodity implementation; any developer could clone it",
+      "1-2": "Already being built by a funded competitor",
+      "0": "Exact copy of an existing product"
+    },
+    "clarity": {
+      "9-10": "One sentence describes who has the problem, what the problem is, and why now",
+      "7-8": "Problem is clear; target user slightly generic",
+      "5-6": "Problem is understandable but solution is vague",
+      "3-4": "Problem is a symptom, not a root cause",
+      "1-2": "Could mean multiple different things to different people",
+      "0": "Incomprehensible"
+    }
+  }
+}
