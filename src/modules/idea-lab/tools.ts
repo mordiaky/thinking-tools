@@ -14,6 +14,10 @@ import { rescoreIdea, getRescoreContext, getScoreHistory } from "./services/resc
 import { checkFermentationAlerts } from "./services/fermentation.js";
 import { getRefinementContext, createRefinedVariant } from "./services/refinement.js";
 import { getDecompositionContext, saveDecomposition } from "./services/decomposition.js";
+import {
+  spawnAssumptionsFromCritique,
+  trackIdeaAsHypothesis,
+} from "../integrations/services.js";
 import { db } from "../../db/client.js";
 import { ideas, ideaRuns, tags, ideaTags } from "../../db/schema.js";
 import { eq, sql } from "drizzle-orm";
@@ -158,7 +162,22 @@ export function registerIdeaLabTools(server: McpServer): void {
         ideaId: args.ideaId,
         findings: args.findings,
       });
-      return toolOk(result);
+
+      let spawnedAssumptions: Awaited<ReturnType<typeof spawnAssumptionsFromCritique>> | null = null;
+      let integrationWarning: string | null = null;
+      try {
+        spawnedAssumptions = spawnAssumptionsFromCritique(args.ideaId, args.findings);
+      } catch (err) {
+        integrationWarning =
+          err instanceof Error ? err.message : String(err);
+        console.error("[integrations] spawnAssumptionsFromCritique failed:", err);
+      }
+
+      return toolOk({
+        ...result,
+        spawnedAssumptions,
+        ...(integrationWarning ? { integrationWarning } : {}),
+      });
     }),
   );
 
@@ -398,11 +417,26 @@ export function registerIdeaLabTools(server: McpServer): void {
         .set({ status: args.newStatus, updatedAt: new Date().toISOString() })
         .where(eq(ideas.id, args.ideaId));
 
+      let trackedHypothesis: ReturnType<typeof trackIdeaAsHypothesis> = null;
+      let integrationWarning: string | null = null;
+      const autoTrackStatuses = new Set(["shortlisted", "build-next"]);
+      if (autoTrackStatuses.has(args.newStatus)) {
+        try {
+          trackedHypothesis = trackIdeaAsHypothesis(args.ideaId);
+        } catch (err) {
+          integrationWarning =
+            err instanceof Error ? err.message : String(err);
+          console.error("[integrations] trackIdeaAsHypothesis failed:", err);
+        }
+      }
+
       return toolOk({
         ideaId: args.ideaId,
         previousStatus: currentStatus,
         newStatus: args.newStatus,
         updatedAt: new Date().toISOString(),
+        trackedHypothesis,
+        ...(integrationWarning ? { integrationWarning } : {}),
       });
     }),
   );
