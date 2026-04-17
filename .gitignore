@@ -5,3 +5,5 @@ build/
 *.db-shm
 .planning/
 .env
+Screenshot_*.png
+*.screenshot.png
