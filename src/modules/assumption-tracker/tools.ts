@@ -8,6 +8,7 @@ import {
   listAssumptions,
   getUntested,
 } from "./services.js";
+import { retrospectiveForAssumption } from "../integrations/services.js";
 import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerAssumptionTrackerTools(server: McpServer): void {
@@ -46,7 +47,22 @@ export function registerAssumptionTrackerTools(server: McpServer): void {
     },
     wrapHandler(async ({ assumption_id, evidence, result }) => {
       const assumption = testAssumption(assumption_id, evidence, result);
-      return toolOk(assumption);
+
+      let retrospective: ReturnType<typeof retrospectiveForAssumption> | null = null;
+      let integrationWarning: string | null = null;
+      try {
+        retrospective = retrospectiveForAssumption(assumption_id);
+      } catch (err) {
+        integrationWarning =
+          err instanceof Error ? err.message : String(err);
+        console.error("[integrations] retrospectiveForAssumption failed:", err);
+      }
+
+      return toolOk({
+        ...assumption,
+        retrospective,
+        ...(integrationWarning ? { integrationWarning } : {}),
+      });
     }),
   );
 

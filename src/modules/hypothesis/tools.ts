@@ -10,6 +10,7 @@ import {
   getHypothesisHistory,
 } from "./services.js";
 import { updateConfidence } from "./bayesian.js";
+import { retrospectiveForHypothesis } from "../integrations/services.js";
 import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerHypothesisTools(server: McpServer): void {
@@ -208,7 +209,21 @@ export function registerHypothesisTools(server: McpServer): void {
         confidence,
       );
 
-      return toolOk(resolved);
+      let retrospective: ReturnType<typeof retrospectiveForHypothesis> | null = null;
+      let integrationWarning: string | null = null;
+      try {
+        retrospective = retrospectiveForHypothesis(hypothesis_id);
+      } catch (err) {
+        integrationWarning =
+          err instanceof Error ? err.message : String(err);
+        console.error("[integrations] retrospectiveForHypothesis failed:", err);
+      }
+
+      return toolOk({
+        ...resolved,
+        retrospective,
+        ...(integrationWarning ? { integrationWarning } : {}),
+      });
     }),
   );
 

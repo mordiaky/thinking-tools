@@ -17,6 +17,7 @@ import { getDecompositionContext, saveDecomposition } from "./services/decomposi
 import {
   spawnAssumptionsFromCritique,
   trackIdeaAsHypothesis,
+  getIdeaLineage,
 } from "../integrations/services.js";
 import { db } from "../../db/client.js";
 import { ideas, ideaRuns, tags, ideaTags } from "../../db/schema.js";
@@ -897,6 +898,21 @@ export function registerIdeaLabTools(server: McpServer): void {
     wrapHandler(async (args) => {
       const result = await checkFermentationAlerts(args.limit);
       return toolOk(result);
+    }),
+  );
+
+  server.tool(
+    "idea_lab_lineage",
+    "Return the full cross-module story of an idea in one call: its parent (if a variant) and child variants, score history, latest critique, auto-spawned assumptions, tracked hypothesis and its evidence count, every decision the idea appears in as an option, and any fermentation alerts. Use this when resuming work on an idea or when auditing why a shortlist contains a given candidate.",
+    {
+      ideaId: z.string().uuid().describe("UUID of the idea to trace"),
+    },
+    wrapHandler(async ({ ideaId }) => {
+      const lineage = getIdeaLineage(ideaId);
+      if (!lineage) {
+        return toolErr("NOT_FOUND", "Idea not found", { ideaId });
+      }
+      return toolOk(lineage);
     }),
   );
 }

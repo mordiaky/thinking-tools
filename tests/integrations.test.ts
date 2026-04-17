@@ -21,7 +21,11 @@ import {
   createDecisionFromShortlist,
   suggestNextAction,
   parseSource,
+  retrospectiveForHypothesis,
+  retrospectiveForAssumption,
+  getIdeaLineage,
 } from "../src/modules/integrations/services.js";
+import { learningEntries, ideaVariants } from "../src/db/schema.js";
 
 function resetDb(): void {
   // Order matters: child tables first to respect FKs, then parents.
@@ -364,5 +368,235 @@ describe("end-to-end: idea pipeline feeds cross-module state", () => {
     );
     expect(criticalSug).toBeDefined();
     expect(criticalSug!.message).toContain("existing alternatives");
+  });
+});
+
+describe("retrospectiveForHypothesis", () => {
+  beforeEach(resetDb);
+
+  test("classifies high-confidence rejection as a mistake", () => {
+    const ideaId = seedIdea("Overconfident", 9);
+    const link = trackIdeaAsHypothesis(ideaId)!;
+
+    db.update(hypotheses)
+      .set({
+        status: "rejected",
+        resolution: "rejected",
+        confidence: 0.05,
+        finalEvidence: "Fell over in production",
+      })
+      .where(eq(hypotheses.id, link.hypothesisId))
+      .run();
+
+    const result = retrospectiveForHypothesis(link.hypothesisId);
+    expect(result.created).toBe(true);
+
+    const entry = db
+      .select()
+      .from(learningEntries)
+      .where(eq(learningEntries.id, result.learningEntryId!))
+      .all()[0];
+    expect(entry.entryType).toBe("mistake");
+    expect(entry.severity).toBe("high");
+    expect(entry.content).toContain("Initial confidence: 0.90");
+    expect(entry.lesson).toContain("high confidence");
+  });
+
+  test("classifies low-confidence confirmation as a surprise", () => {
+    const ideaId = seedIdea("Underrated", 2);
+    const link = trackIdeaAsHypothesis(ideaId)!;
+
+    db.update(hypotheses)
+      .set({
+        status: "confirmed",
+        resolution: "confirmed",
+        confidence: 0.95,
+        finalEvidence: "Users loved it",
+      })
+      .where(eq(hypotheses.id, link.hypothesisId))
+      .run();
+
+    const result = retrospectiveForHypothesis(link.hypothesisId);
+    expect(result.created).toBe(true);
+
+    const entry = db
+      .select()
+      .from(learningEntries)
+      .where(eq(learningEntries.id, result.learningEntryId!))
+      .all()[0];
+    expect(entry.entryType).toBe("surprise");
+  });
+
+  test("is idempotent per hypothesis", () => {
+    const ideaId = seedIdea("Dup", 5);
+    const link = trackIdeaAsHypothesis(ideaId)!;
+    db.update(hypotheses)
+      .set({
+        status: "confirmed",
+        resolution: "confirmed",
+        confidence: 0.9,
+        finalEvidence: "ok",
+      })
+      .where(eq(hypotheses.id, link.hypothesisId))
+      .run();
+
+    const first = retrospectiveForHypothesis(link.hypothesisId);
+    const second = retrospectiveForHypothesis(link.hypothesisId);
+
+    expect(first.created).toBe(true);
+    expect(second.created).toBe(false);
+    expect(second.reason).toBe("already-recorded");
+    expect(db.select().from(learningEntries).all()).toHaveLength(1);
+  });
+
+  test("refuses to record an unresolved hypothesis", () => {
+    const ideaId = seedIdea("Active", 5);
+    const link = trackIdeaAsHypothesis(ideaId)!;
+
+    const result = retrospectiveForHypothesis(link.hypothesisId);
+    expect(result.created).toBe(false);
+    expect(result.reason).toBe("not-resolved-yet");
+  });
+});
+
+describe("retrospectiveForAssumption", () => {
+  beforeEach(resetDb);
+
+  test("classifies critical invalidation as high-severity mistake", () => {
+    const rows = db
+      .insert(assumptions)
+      .values({
+        statement: "Users will pay",
+        impact: "critical",
+        status: "invalidated",
+        confidence: 0.2,
+        evidenceText: "No one converted",
+        testedAt: new Date().toISOString(),
+      })
+      .returning({ id: assumptions.id })
+      .all();
+
+    const result = retrospectiveForAssumption(rows[0].id);
+    expect(result.created).toBe(true);
+
+    const entry = db
+      .select()
+      .from(learningEntries)
+      .where(eq(learningEntries.id, result.learningEntryId!))
+      .all()[0];
+    expect(entry.entryType).toBe("mistake");
+    expect(entry.severity).toBe("high");
+  });
+
+  test("classifies validation as an insight", () => {
+    const rows = db
+      .insert(assumptions)
+      .values({
+        statement: "Docs can be auto-generated",
+        impact: "medium",
+        status: "validated",
+        confidence: 0.9,
+        evidenceText: "Prototype worked",
+        testedAt: new Date().toISOString(),
+      })
+      .returning({ id: assumptions.id })
+      .all();
+
+    const result = retrospectiveForAssumption(rows[0].id);
+    expect(result.created).toBe(true);
+    const entry = db
+      .select()
+      .from(learningEntries)
+      .where(eq(learningEntries.id, result.learningEntryId!))
+      .all()[0];
+    expect(entry.entryType).toBe("insight");
+    expect(entry.severity).toBe("low");
+  });
+
+  test("refuses untested assumption", () => {
+    const rows = db
+      .insert(assumptions)
+      .values({
+        statement: "untested",
+        impact: "low",
+        status: "untested",
+        confidence: 0.5,
+      })
+      .returning({ id: assumptions.id })
+      .all();
+    const result = retrospectiveForAssumption(rows[0].id);
+    expect(result.created).toBe(false);
+    expect(result.reason).toBe("not-tested-yet");
+  });
+});
+
+describe("getIdeaLineage", () => {
+  beforeEach(resetDb);
+
+  test("returns null for unknown idea", () => {
+    expect(getIdeaLineage("00000000-0000-0000-0000-000000000000")).toBeNull();
+  });
+
+  test("assembles a full trail from critique, spawn, promote, and decision", () => {
+    const ideaId = seedIdea("Lineage", 7.5, "shortlisted");
+
+    // Critique + auto-spawn assumptions
+    db.insert(critiques)
+      .values({
+        ideaId,
+        content: "stub",
+        existingProducts: "Rival",
+        fragileDependencies: "ExtAPI",
+        overallVerdict: "weak",
+        verdictReasoning: "meh",
+      })
+      .run();
+    spawnAssumptionsFromCritique(ideaId, {
+      wrapperProblem: null,
+      existingProducts: "Rival",
+      fragileDependencies: "ExtAPI",
+      vagueStatement: null,
+      violatesSoftwareOnly: false,
+      overallVerdict: "weak",
+      verdictReasoning: "",
+    });
+
+    // Promote -> hypothesis
+    trackIdeaAsHypothesis(ideaId);
+
+    // Decision seeded
+    createDecisionFromShortlist("Which to build?", undefined, [ideaId]);
+
+    const lineage = getIdeaLineage(ideaId)!;
+    expect(lineage.idea.title).toBe("Lineage");
+    expect(lineage.scores).toHaveLength(1);
+    expect(lineage.critique?.overallVerdict).toBe("weak");
+    expect(lineage.spawnedAssumptions).toHaveLength(2);
+    expect(lineage.trackedHypothesis).not.toBeNull();
+    expect(lineage.trackedHypothesis!.confidence).toBeCloseTo(0.75, 5);
+    expect(lineage.decisionAppearances).toHaveLength(1);
+    expect(lineage.decisionAppearances[0].decisionTitle).toBe("Which to build?");
+  });
+
+  test("surfaces parent and variants", () => {
+    const parentId = seedIdea("Parent", 6);
+    const childId = seedIdea("Child", 5);
+    db.insert(ideaVariants)
+      .values({
+        parentId,
+        ideaId: childId,
+        mutationAxis: "target_user",
+        mutationDepth: 1,
+      })
+      .run();
+
+    const parent = getIdeaLineage(parentId)!;
+    expect(parent.variants).toHaveLength(1);
+    expect(parent.variants[0].title).toBe("Child");
+    expect(parent.variants[0].mutationAxis).toBe("target_user");
+
+    const child = getIdeaLineage(childId)!;
+    expect(child.parent).not.toBeNull();
+    expect(child.parent!.title).toBe("Parent");
   });
 });
