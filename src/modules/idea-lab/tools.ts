@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 import { saveScore } from "./services/scoring.js";
 import { saveCritique } from "./services/critique.js";
 import { getStoredIdeaSummaries, recordDuplicateCheck } from "./services/deduplication.js";
@@ -47,7 +48,7 @@ export function registerIdeaLabTools(server: McpServer): void {
           "When true, steers generation toward underrepresented domains in the portfolio. Uses portfolio analysis to identify gaps.",
         ),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const result = await generateIdeas({
         domain: args.domain,
         problemArea: args.problemArea,
@@ -71,10 +72,8 @@ export function registerIdeaLabTools(server: McpServer): void {
         pipeline: result.pipelineSteps,
       };
 
-      return {
-        content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
-      };
-    },
+      return toolOk(output);
+    }),
   );
 
   server.tool(
@@ -110,17 +109,15 @@ export function registerIdeaLabTools(server: McpServer): void {
         .optional()
         .describe("Optional per-run threshold overrides — omit to use config defaults"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const result = await saveScore({
         ideaId: args.ideaId,
         scores: args.scores,
         reasoning: args.reasoning,
         thresholds: args.thresholds,
       });
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -156,15 +153,13 @@ export function registerIdeaLabTools(server: McpServer): void {
           .describe("1-3 sentence summary explaining the verdict — be specific about what's wrong or why it passes"),
       }),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const result = await saveCritique({
         ideaId: args.ideaId,
         findings: args.findings,
       });
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -189,39 +184,25 @@ export function registerIdeaLabTools(server: McpServer): void {
         .optional()
         .describe("Omit on first call. Provide on second call if isDuplicate=true."),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       // Phase 1: Return stored idea summaries for comparison
       if (args.isDuplicate === undefined) {
         const summaries = await getStoredIdeaSummaries(args.ideaId);
         if (summaries.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: JSON.stringify({
-                  phase: "complete",
-                  isDuplicate: false,
-                  message: "No stored ideas to compare against. This is the first idea.",
-                  nextStep: "Call idea_lab_save_idea with this ideaId to persist the idea.",
-                }, null, 2),
-              },
-            ],
-          };
+          return toolOk({
+            phase: "complete",
+            isDuplicate: false,
+            message: "No stored ideas to compare against. This is the first idea.",
+            nextStep: "Call idea_lab_save_idea with this ideaId to persist the idea.",
+          });
         }
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({
-                phase: "comparison_needed",
-                ideaId: args.ideaId,
-                storedIdeaCount: summaries.length,
-                storedIdeas: summaries,
-                instructions: "Compare the idea being checked against EACH stored idea above. 'Too similar' = same core problem AND same solution approach. Variations on a theme are allowed. Call check_duplicate again with isDuplicate=true/false and duplicateOf array if duplicates found.",
-              }, null, 2),
-            },
-          ],
-        };
+        return toolOk({
+          phase: "comparison_needed",
+          ideaId: args.ideaId,
+          storedIdeaCount: summaries.length,
+          storedIdeas: summaries,
+          instructions: "Compare the idea being checked against EACH stored idea above. 'Too similar' = same core problem AND same solution approach. Variations on a theme are allowed. Call check_duplicate again with isDuplicate=true/false and duplicateOf array if duplicates found.",
+        });
       }
 
       // Phase 2: Record the comparison result
@@ -230,10 +211,8 @@ export function registerIdeaLabTools(server: McpServer): void {
         isDuplicate: args.isDuplicate,
         duplicateOf: args.duplicateOf,
       });
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -257,7 +236,7 @@ export function registerIdeaLabTools(server: McpServer): void {
         .optional()
         .describe("The idea_run this belongs to — for batch tracking and pass count"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       // Insert new idea record
       const [inserted] = await db
         .insert(ideas)
@@ -301,25 +280,14 @@ export function registerIdeaLabTools(server: McpServer): void {
           .where(eq(ideaRuns.id, args.runId));
       }
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                ideaId,
-                status: "raw",
-                runId: args.runId ?? null,
-                nextStep:
-                  "Call idea_lab_score_idea with ideaId to score this idea. Read the scoring-rubric resource first.",
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        ideaId,
+        status: "raw",
+        runId: args.runId ?? null,
+        nextStep:
+          "Call idea_lab_score_idea with ideaId to score this idea. Read the scoring-rubric resource first.",
+      });
+    }),
   );
 
   server.tool(
@@ -345,48 +313,26 @@ export function registerIdeaLabTools(server: McpServer): void {
           "Semantic search query — returns ALL idea summaries for the caller to judge relevance. Overrides all other filters.",
         ),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       if (args.semanticQuery) {
         const allIdeas = await getAllIdeaSummaries();
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  mode: "semantic_search",
-                  query: args.semanticQuery,
-                  instructions:
-                    "Read all idea summaries below and return only those semantically matching the query. Judge by conceptual similarity, not keyword overlap.",
-                  ideas: allIdeas,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
+        return toolOk({
+          mode: "semantic_search",
+          query: args.semanticQuery,
+          instructions:
+            "Read all idea summaries below and return only those semantically matching the query. Judge by conceptual similarity, not keyword overlap.",
+          ideas: allIdeas,
+        });
       }
 
       const rows = await searchIdeas(args);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                results: rows,
-                count: rows.length,
-                limit: args.limit,
-                offset: args.offset,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        results: rows,
+        count: rows.length,
+        limit: args.limit,
+        offset: args.offset,
+      });
+    }),
   );
 
   server.tool(
@@ -401,17 +347,10 @@ export function registerIdeaLabTools(server: McpServer): void {
         .default(10)
         .describe("Maximum number of ideas to return (1-50)"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const rows = await getRecentIdeas(args.limit);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ results: rows, count: rows.length }, null, 2),
-          },
-        ],
-      };
-    },
+      return toolOk({ results: rows, count: rows.length });
+    }),
   );
 
   server.tool(
@@ -423,7 +362,7 @@ export function registerIdeaLabTools(server: McpServer): void {
         .enum(["raw", "shortlisted", "build-next", "rejected"])
         .describe("Target status for the idea"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       // Fetch current idea status
       const rows = await db
         .select({ id: ideas.id, status: ideas.status })
@@ -431,14 +370,7 @@ export function registerIdeaLabTools(server: McpServer): void {
         .where(eq(ideas.id, args.ideaId));
 
       if (rows.length === 0) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify({ error: "Idea not found", ideaId: args.ideaId }, null, 2),
-            },
-          ],
-        };
+        return toolErr("NOT_FOUND", "Idea not found", { ideaId: args.ideaId });
       }
 
       const currentStatus = rows[0].status;
@@ -453,23 +385,11 @@ export function registerIdeaLabTools(server: McpServer): void {
 
       const allowed = validTransitions[currentStatus] ?? [];
       if (!allowed.includes(args.newStatus)) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  error: "Invalid status transition",
-                  from: currentStatus,
-                  to: args.newStatus,
-                  validTransitions: allowed.length > 0 ? allowed : ["none — terminal state"],
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
+        return toolErr("INVALID_STATE", "Invalid status transition", {
+          from: currentStatus,
+          to: args.newStatus,
+          validTransitions: allowed.length > 0 ? allowed : ["none — terminal state"],
+        });
       }
 
       // Apply the transition
@@ -478,24 +398,13 @@ export function registerIdeaLabTools(server: McpServer): void {
         .set({ status: args.newStatus, updatedAt: new Date().toISOString() })
         .where(eq(ideas.id, args.ideaId));
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                ideaId: args.ideaId,
-                previousStatus: currentStatus,
-                newStatus: args.newStatus,
-                updatedAt: new Date().toISOString(),
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        ideaId: args.ideaId,
+        previousStatus: currentStatus,
+        newStatus: args.newStatus,
+        updatedAt: new Date().toISOString(),
+      });
+    }),
   );
 
   server.tool(
@@ -504,12 +413,13 @@ export function registerIdeaLabTools(server: McpServer): void {
     {
       ideaId: z.string().uuid().describe("UUID of the rejected idea to delete"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const result = await deleteRejectedIdea(args.ideaId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      if ("error" in result) {
+        return toolErr("NOT_FOUND", result.error as string);
+      }
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -518,13 +428,13 @@ export function registerIdeaLabTools(server: McpServer): void {
     {
       patternId: z.string().uuid().describe("UUID of the rejection pattern to remove"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const result = await deletePattern(args.patternId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        ...(result.error ? { isError: true } : {}),
-      };
-    },
+      if ("error" in result) {
+        return toolErr("NOT_FOUND", result.error as string);
+      }
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -547,92 +457,48 @@ export function registerIdeaLabTools(server: McpServer): void {
       domain: z.string().optional().describe("Domain category for the variant"),
       tags: z.array(z.string()).optional().describe("Semantic tags for the variant"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       // Step 1: Return mutation context (no axis provided)
       if (args.axis === undefined) {
         const context = await getMutationContext(args.ideaId);
         if ("error" in context) {
-          return {
-            content: [{ type: "text", text: JSON.stringify(context, null, 2) }],
-            isError: true,
-          };
+          return toolErr("NOT_FOUND", context.error as string);
         }
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  phase: "mutation_context",
-                  idea: context.idea,
-                  critique: context.critique,
-                  currentDepth: context.currentDepth,
-                  canMutate: context.canMutate,
-                  ...(context.depthMessage ? { depthMessage: context.depthMessage } : {}),
-                  instructions: context.canMutate
-                    ? "Choose a mutation axis (target_user, scope, tech_approach, business_model). Generate a new idea variant by changing the chosen axis while keeping the core insight. Then call mutate_idea again with ideaId, axis, and full new idea fields (title, oneLiner, problem, solution, targetUser, domain are required)."
-                    : "Mutation depth cap reached. Cannot mutate further. Max depth is 2 generations.",
-                  mutationAxes: {
-                    target_user: "Change who this is built for — different segment, role, or use case",
-                    scope: "Change the scope — narrower feature set, broader platform, or different problem boundary",
-                    tech_approach: "Change the technical implementation — different architecture, protocol, or tooling",
-                    business_model: "Change how value is captured — different pricing, delivery, or distribution model",
-                  },
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
+        return toolOk({
+          phase: "mutation_context",
+          idea: context.idea,
+          critique: context.critique,
+          currentDepth: context.currentDepth,
+          canMutate: context.canMutate,
+          ...(context.depthMessage ? { depthMessage: context.depthMessage } : {}),
+          instructions: context.canMutate
+            ? "Choose a mutation axis (target_user, scope, tech_approach, business_model). Generate a new idea variant by changing the chosen axis while keeping the core insight. Then call mutate_idea again with ideaId, axis, and full new idea fields (title, oneLiner, problem, solution, targetUser, domain are required)."
+            : "Mutation depth cap reached. Cannot mutate further. Max depth is 2 generations.",
+          mutationAxes: {
+            target_user: "Change who this is built for — different segment, role, or use case",
+            scope: "Change the scope — narrower feature set, broader platform, or different problem boundary",
+            tech_approach: "Change the technical implementation — different architecture, protocol, or tooling",
+            business_model: "Change how value is captured — different pricing, delivery, or distribution model",
+          },
+        });
       }
 
       // Step 2: Create the variant idea
       if (!args.title || !args.oneLiner || !args.problem || !args.solution) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  error: "Step 2 requires title, oneLiner, problem, and solution for the new variant idea",
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("INVALID_INPUT", "Step 2 requires title, oneLiner, problem, and solution for the new variant idea");
       }
 
       // Validate depth cap before creating
       const context = await getMutationContext(args.ideaId);
       if ("error" in context) {
-        return {
-          content: [{ type: "text", text: JSON.stringify(context, null, 2) }],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", context.error as string);
       }
 
       if (!context.canMutate) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  error: "Mutation depth cap reached",
-                  depthMessage: context.depthMessage,
-                  currentDepth: context.currentDepth,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("CONSTRAINT_VIOLATION", "Mutation depth cap reached", {
+          depthMessage: context.depthMessage,
+          currentDepth: context.currentDepth,
+        });
       }
 
       const newDepth = context.currentDepth + 1;
@@ -672,26 +538,15 @@ export function registerIdeaLabTools(server: McpServer): void {
       // Record the mutation relationship
       await recordMutation(args.ideaId, newIdeaId, args.axis, newDepth);
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                newIdeaId,
-                parentId: args.ideaId,
-                axis: args.axis,
-                depth: newDepth,
-                nextStep:
-                  "Run the full pipeline on the new idea: call idea_lab_score_idea (read rubric first), then idea_lab_critique_idea, then idea_lab_check_duplicate. After pipeline, promote with idea_lab_promote_idea.",
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        newIdeaId,
+        parentId: args.ideaId,
+        axis: args.axis,
+        depth: newDepth,
+        nextStep:
+          "Run the full pipeline on the new idea: call idea_lab_score_idea (read rubric first), then idea_lab_critique_idea, then idea_lab_check_duplicate. After pipeline, promote with idea_lab_promote_idea.",
+      });
+    }),
   );
 
   server.tool(
@@ -712,12 +567,10 @@ export function registerIdeaLabTools(server: McpServer): void {
         .default(5)
         .describe("Maximum ideas to resurface (1-5, default 5)"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const result = await getResurfaceCandidates(args.daysOld, args.limit);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -726,13 +579,13 @@ export function registerIdeaLabTools(server: McpServer): void {
     {
       ideaId: z.string().uuid().describe("UUID of the idea that was re-evaluated"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const result = await markRevalidated(args.ideaId);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        ...("error" in result ? { isError: true } : {}),
-      };
-    },
+      if ("error" in result) {
+        return toolErr("NOT_FOUND", result.error as string);
+      }
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -758,33 +611,23 @@ export function registerIdeaLabTools(server: McpServer): void {
           "Omit on first call. Provide 3-5 detailed steps on second call to save the plan.",
         ),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       if (args.planSteps !== undefined) {
         // Step 2: save the plan
         const result = await saveMvpPlan(args.ideaId, args.planSteps as MvpStep[]);
         if ("error" in result) {
-          return {
-            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-            isError: true,
-          };
+          return toolErr("INVALID_STATE", result.error as string);
         }
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
+        return toolOk(result);
       }
 
       // Step 1: return idea content + instructions
       const result = await getIdeaForPlanning(args.ideaId);
       if ("error" in result) {
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", result.error as string);
       }
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -806,9 +649,7 @@ export function registerIdeaLabTools(server: McpServer): void {
           "Split by distinct problem-solution pairs. One idea = one problem + one solution. If text describes multiple problems or multiple solutions to the same problem, split into separate ideas. Ignore meta-commentary, tangents, and non-idea content.",
       };
 
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
+      return toolOk(result);
     },
   );
 
@@ -832,38 +673,19 @@ export function registerIdeaLabTools(server: McpServer): void {
       domain: z.string().optional().describe("Domain category"),
       tags: z.array(z.string()).optional().describe("Semantic tags"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       // Step 1: Return refinement context (no constraint provided)
       if (args.constraint === undefined) {
         const context = await getRefinementContext(args.ideaId);
         if ("error" in context) {
-          return {
-            content: [{ type: "text", text: JSON.stringify(context, null, 2) }],
-            isError: true,
-          };
+          return toolErr("NOT_FOUND", context.error as string);
         }
-        return {
-          content: [{ type: "text", text: JSON.stringify(context, null, 2) }],
-        };
+        return toolOk(context);
       }
 
       // Step 2: Create the refined variant
       if (!args.title || !args.oneLiner || !args.problem || !args.solution) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  error: "Step 2 requires title, oneLiner, problem, and solution for the refined idea",
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("INVALID_INPUT", "Step 2 requires title, oneLiner, problem, and solution for the refined idea");
       }
 
       const result = await createRefinedVariant(args.ideaId, args.constraint, {
@@ -880,16 +702,11 @@ export function registerIdeaLabTools(server: McpServer): void {
       });
 
       if ("error" in result) {
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", result.error as string);
       }
 
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -916,35 +733,25 @@ export function registerIdeaLabTools(server: McpServer): void {
         .optional()
         .describe("Omit on Step 1. Provide 3-7 micro-ideas on Step 2."),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       // Step 1: Return decomposition context (no microIdeas provided)
       if (args.microIdeas === undefined) {
         const context = await getDecompositionContext(args.ideaId);
         if ("error" in context) {
-          return {
-            content: [{ type: "text", text: JSON.stringify(context, null, 2) }],
-            isError: true,
-          };
+          return toolErr("NOT_FOUND", context.error as string);
         }
-        return {
-          content: [{ type: "text", text: JSON.stringify(context, null, 2) }],
-        };
+        return toolOk(context);
       }
 
       // Step 2: Save all micro-ideas
       const result = await saveDecomposition(args.ideaId, args.microIdeas);
 
       if ("error" in result) {
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-          isError: true,
-        };
+        return toolErr("INVALID_STATE", result.error as string);
       }
 
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -982,71 +789,35 @@ export function registerIdeaLabTools(server: McpServer): void {
         .optional()
         .describe("Summary of web search findings: new competitors, tech changes, market shifts"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       if (args.step === "1") {
         // Step 1: return idea content and prior scores for research
         const context = await getRescoreContext(args.ideaId);
         if ("error" in context) {
-          return {
-            content: [{ type: "text", text: JSON.stringify(context, null, 2) }],
-            isError: true,
-          };
+          return toolErr("NOT_FOUND", context.error as string);
         }
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  phase: "rescore_context",
-                  idea: context.idea,
-                  priorScores: context.priorScores,
-                  instructions: `Search the web for: new competitors to "${context.idea.title}", recent tech changes affecting ${context.idea.domain ?? "this domain"}, market shifts in the problem space. Then call this tool again with step='2', providing updated scores, reasoning, and marketContext summarizing your findings.`,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
+        return toolOk({
+          phase: "rescore_context",
+          idea: context.idea,
+          priorScores: context.priorScores,
+          instructions: `Search the web for: new competitors to "${context.idea.title}", recent tech changes affecting ${context.idea.domain ?? "this domain"}, market shifts in the problem space. Then call this tool again with step='2', providing updated scores, reasoning, and marketContext summarizing your findings.`,
+        });
       }
 
       // Step 2: validate and persist rescore
       if (!args.scores || !args.reasoning) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: JSON.stringify(
-                { error: "Step 2 requires scores and reasoning objects" },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("INVALID_INPUT", "Step 2 requires scores and reasoning objects");
       }
 
-      try {
-        const result = await rescoreIdea({
-          ideaId: args.ideaId,
-          scores: args.scores,
-          reasoning: args.reasoning,
-          marketContext: args.marketContext,
-        });
+      const result = await rescoreIdea({
+        ideaId: args.ideaId,
+        scores: args.scores,
+        reasoning: args.reasoning,
+        marketContext: args.marketContext,
+      });
 
-        return {
-          content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text", text: JSON.stringify({ error: message }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -1060,7 +831,7 @@ export function registerIdeaLabTools(server: McpServer): void {
         .default(false)
         .describe("When true, includes per-dimension reasoning and rubric snapshots"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const history = await getScoreHistory(args.ideaId);
 
       const output = history.map((entry) => {
@@ -1072,19 +843,8 @@ export function registerIdeaLabTools(server: McpServer): void {
         return rest;
       });
 
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { ideaId: args.ideaId, scoreCount: output.length, history: output },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({ ideaId: args.ideaId, scoreCount: output.length, history: output });
+    }),
   );
 
   server.tool(
@@ -1100,11 +860,9 @@ export function registerIdeaLabTools(server: McpServer): void {
         .default(10)
         .describe("Maximum number of alerts to return (1-20, default 10)"),
     },
-    async (args) => {
+    wrapHandler(async (args) => {
       const result = await checkFermentationAlerts(args.limit);
-      return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
-      };
-    },
+      return toolOk(result);
+    }),
   );
 }

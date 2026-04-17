@@ -10,6 +10,7 @@ import {
   getHypothesisHistory,
 } from "./services.js";
 import { updateConfidence } from "./bayesian.js";
+import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerHypothesisTools(server: McpServer): void {
   server.tool(
@@ -34,7 +35,7 @@ export function registerHypothesisTools(server: McpServer): void {
         .optional()
         .describe("Optional context about why this hypothesis was formed"),
     },
-    async ({ title, description, initial_confidence, tags, context }) => {
+    wrapHandler(async ({ title, description, initial_confidence, tags, context }) => {
       const hypothesis = createHypothesis(
         title,
         description,
@@ -43,15 +44,8 @@ export function registerHypothesisTools(server: McpServer): void {
         context,
       );
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(hypothesis, null, 2),
-          },
-        ],
-      };
-    },
+      return toolOk(hypothesis);
+    }),
   );
 
   server.tool(
@@ -75,40 +69,14 @@ export function registerHypothesisTools(server: McpServer): void {
         .optional()
         .describe("Optional source of the evidence"),
     },
-    async ({ hypothesis_id, type, description, weight, source }) => {
+    wrapHandler(async ({ hypothesis_id, type, description, weight, source }) => {
       const hypothesis = getHypothesis(hypothesis_id);
       if (!hypothesis) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                { error: `Hypothesis not found: ${hypothesis_id}` },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", `Hypothesis not found: ${hypothesis_id}`);
       }
 
       if (hypothesis.status !== "active") {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  error: `Cannot add evidence to ${hypothesis.status} hypothesis`,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("INVALID_STATE", `Cannot add evidence to ${hypothesis.status} hypothesis`);
       }
 
       const confidenceBefore = hypothesis.confidence;
@@ -126,27 +94,16 @@ export function registerHypothesisTools(server: McpServer): void {
 
       const updated = getHypothesis(hypothesis_id);
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                evidence: ev,
-                hypothesis: updated,
-                confidence_change: {
-                  before: confidenceBefore,
-                  after: confidenceAfter,
-                  delta: +(confidenceAfter - confidenceBefore).toFixed(4),
-                },
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        evidence: ev,
+        hypothesis: updated,
+        confidence_change: {
+          before: confidenceBefore,
+          after: confidenceAfter,
+          delta: +(confidenceAfter - confidenceBefore).toFixed(4),
+        },
+      });
+    }),
   );
 
   server.tool(
@@ -171,22 +128,10 @@ export function registerHypothesisTools(server: McpServer): void {
         .optional()
         .describe("Updated tags"),
     },
-    async ({ hypothesis_id, confidence, description, tags }) => {
+    wrapHandler(async ({ hypothesis_id, confidence, description, tags }) => {
       const hypothesis = getHypothesis(hypothesis_id);
       if (!hypothesis) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                { error: `Hypothesis not found: ${hypothesis_id}` },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", `Hypothesis not found: ${hypothesis_id}`);
       }
 
       const updates: { confidence?: number; description?: string; tags?: string[] } = {};
@@ -196,15 +141,8 @@ export function registerHypothesisTools(server: McpServer): void {
 
       const updated = updateHypothesis(hypothesis_id, updates);
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(updated, null, 2),
-          },
-        ],
-      };
-    },
+      return toolOk(updated);
+    }),
   );
 
   server.tool(
@@ -224,25 +162,14 @@ export function registerHypothesisTools(server: McpServer): void {
         .optional()
         .describe("Filter by tags (matches any)"),
     },
-    async ({ status, sort_by, tags }) => {
+    wrapHandler(async ({ status, sort_by, tags }) => {
       const hypothesesList = listHypotheses(status, sort_by, tags);
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: hypothesesList.length,
-                hypotheses: hypothesesList,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        count: hypothesesList.length,
+        hypotheses: hypothesesList,
+      });
+    }),
   );
 
   server.tool(
@@ -264,40 +191,14 @@ export function registerHypothesisTools(server: McpServer): void {
         .optional()
         .describe("Optional final confidence (defaults to 0.99 for confirmed, 0.01 for rejected)"),
     },
-    async ({ hypothesis_id, resolution, final_evidence, confidence }) => {
+    wrapHandler(async ({ hypothesis_id, resolution, final_evidence, confidence }) => {
       const hypothesis = getHypothesis(hypothesis_id);
       if (!hypothesis) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                { error: `Hypothesis not found: ${hypothesis_id}` },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", `Hypothesis not found: ${hypothesis_id}`);
       }
 
       if (hypothesis.status !== "active") {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  error: `Hypothesis already resolved as ${hypothesis.status}`,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("INVALID_STATE", `Hypothesis already resolved as ${hypothesis.status}`);
       }
 
       const resolved = resolveHypothesis(
@@ -307,15 +208,8 @@ export function registerHypothesisTools(server: McpServer): void {
         confidence,
       );
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(resolved, null, 2),
-          },
-        ],
-      };
-    },
+      return toolOk(resolved);
+    }),
   );
 
   server.tool(
@@ -324,40 +218,17 @@ export function registerHypothesisTools(server: McpServer): void {
     {
       hypothesis_id: z.string().describe("ID of the hypothesis"),
     },
-    async ({ hypothesis_id }) => {
+    wrapHandler(async ({ hypothesis_id }) => {
       const { hypothesis, events } = getHypothesisHistory(hypothesis_id);
 
       if (!hypothesis) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                { error: `Hypothesis not found: ${hypothesis_id}` },
-                null,
-                2,
-              ),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", `Hypothesis not found: ${hypothesis_id}`);
       }
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                hypothesis,
-                timeline: events,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        hypothesis,
+        timeline: events,
+      });
+    }),
   );
 }

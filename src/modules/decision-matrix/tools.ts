@@ -10,6 +10,7 @@ import {
   listDecisions,
   decideOption,
 } from "./services.js";
+import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerDecisionMatrixTools(server: McpServer): void {
   server.tool(
@@ -19,12 +20,10 @@ export function registerDecisionMatrixTools(server: McpServer): void {
       title: z.string().max(500).describe("Title of the decision"),
       description: z.string().max(10000).optional().describe("Optional description"),
     },
-    async ({ title, description }) => {
+    wrapHandler(async ({ title, description }) => {
       const decision = createDecision(title, description);
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(decision, null, 2) }],
-      };
-    },
+      return toolOk(decision);
+    }),
   );
 
   server.tool(
@@ -41,19 +40,10 @@ export function registerDecisionMatrixTools(server: McpServer): void {
         .describe("Importance weight (0.1-10, default 1)"),
       description: z.string().max(2000).optional().describe("Optional description"),
     },
-    async ({ decision_id, name, weight, description }) => {
-      try {
-        const criterion = addCriterion(decision_id, name, weight, description);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(criterion, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ decision_id, name, weight, description }) => {
+      const criterion = addCriterion(decision_id, name, weight, description);
+      return toolOk(criterion);
+    }),
   );
 
   server.tool(
@@ -64,19 +54,10 @@ export function registerDecisionMatrixTools(server: McpServer): void {
       name: z.string().max(500).describe("Name of the option"),
       description: z.string().max(2000).optional().describe("Optional description"),
     },
-    async ({ decision_id, name, description }) => {
-      try {
-        const option = addOption(decision_id, name, description);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(option, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ decision_id, name, description }) => {
+      const option = addOption(decision_id, name, description);
+      return toolOk(option);
+    }),
   );
 
   server.tool(
@@ -88,19 +69,10 @@ export function registerDecisionMatrixTools(server: McpServer): void {
       score: z.number().min(0).max(10).describe("Score 0-10"),
       reasoning: z.string().max(2000).optional().describe("Optional reasoning for this rating"),
     },
-    async ({ option_id, criterion_id, score, reasoning }) => {
-      try {
-        const rating = rateOption(option_id, criterion_id, score, reasoning);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(rating, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ option_id, criterion_id, score, reasoning }) => {
+      const rating = rateOption(option_id, criterion_id, score, reasoning);
+      return toolOk(rating);
+    }),
   );
 
   server.tool(
@@ -109,32 +81,14 @@ export function registerDecisionMatrixTools(server: McpServer): void {
     {
       decision_id: z.string().describe("ID of the decision"),
     },
-    async ({ decision_id }) => {
-      try {
-        const ranked = evaluateDecision(decision_id);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  decision_id,
-                  ranked_options: ranked,
-                  winner: ranked[0] ?? null,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ decision_id }) => {
+      const ranked = evaluateDecision(decision_id);
+      return toolOk({
+        decision_id,
+        ranked_options: ranked,
+        winner: ranked[0] ?? null,
+      });
+    }),
   );
 
   server.tool(
@@ -144,19 +98,10 @@ export function registerDecisionMatrixTools(server: McpServer): void {
       decision_id: z.string().describe("ID of the decision"),
       option_id: z.string().describe("ID of the chosen option"),
     },
-    async ({ decision_id, option_id }) => {
-      try {
-        const decision = decideOption(decision_id, option_id);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(decision, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ decision_id, option_id }) => {
+      const decision = decideOption(decision_id, option_id);
+      return toolOk(decision);
+    }),
   );
 
   server.tool(
@@ -168,24 +113,13 @@ export function registerDecisionMatrixTools(server: McpServer): void {
         .default("all")
         .describe("Filter by status (default: all)"),
     },
-    async ({ status }) => {
+    wrapHandler(async ({ status }) => {
       const decisionList = listDecisions(status);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: decisionList.length,
-                decisions: decisionList,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        count: decisionList.length,
+        decisions: decisionList,
+      });
+    }),
   );
 
   server.tool(
@@ -194,17 +128,12 @@ export function registerDecisionMatrixTools(server: McpServer): void {
     {
       decision_id: z.string().describe("ID of the decision"),
     },
-    async ({ decision_id }) => {
+    wrapHandler(async ({ decision_id }) => {
       const detail = getDecision(decision_id);
       if (!detail) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: `Decision not found: ${decision_id}` }, null, 2) }],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", "Decision not found: " + decision_id);
       }
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(detail, null, 2) }],
-      };
-    },
+      return toolOk(detail);
+    }),
   );
 }

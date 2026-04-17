@@ -11,6 +11,7 @@ import {
   listContradictions,
   findPotentialContradictions,
 } from "./services.js";
+import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerContradictionDetectorTools(server: McpServer): void {
   server.tool(
@@ -28,12 +29,10 @@ export function registerContradictionDetectorTools(server: McpServer): void {
       source: z.string().max(500).optional().describe("Where this belief comes from"),
       tags: z.array(z.string()).optional().describe("Tags for categorization"),
     },
-    async ({ statement, domain, confidence, source, tags }) => {
+    wrapHandler(async ({ statement, domain, confidence, source, tags }) => {
       const belief = addBelief(statement, domain, confidence, source, tags);
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(belief, null, 2) }],
-      };
-    },
+      return toolOk(belief);
+    }),
   );
 
   server.tool(
@@ -43,21 +42,10 @@ export function registerContradictionDetectorTools(server: McpServer): void {
       domain: z.string().max(200).optional().describe("Filter by domain"),
       tags: z.array(z.string()).optional().describe("Filter by tags (any match)"),
     },
-    async ({ domain, tags }) => {
+    wrapHandler(async ({ domain, tags }) => {
       const beliefList = listBeliefs(domain, tags);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              { count: beliefList.length, beliefs: beliefList },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({ count: beliefList.length, beliefs: beliefList });
+    }),
   );
 
   server.tool(
@@ -71,19 +59,10 @@ export function registerContradictionDetectorTools(server: McpServer): void {
       source: z.string().max(500).optional().describe("Updated source"),
       tags: z.array(z.string()).optional().describe("Updated tags"),
     },
-    async ({ belief_id, statement, domain, confidence, source, tags }) => {
-      try {
-        const belief = updateBelief(belief_id, { statement, domain, confidence, source, tags });
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(belief, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ belief_id, statement, domain, confidence, source, tags }) => {
+      const belief = updateBelief(belief_id, { statement, domain, confidence, source, tags });
+      return toolOk(belief);
+    }),
   );
 
   server.tool(
@@ -94,19 +73,10 @@ export function registerContradictionDetectorTools(server: McpServer): void {
       belief_b_id: z.string().describe("ID of the second belief"),
       explanation: z.string().max(5000).describe("Explanation of why these beliefs contradict"),
     },
-    async ({ belief_a_id, belief_b_id, explanation }) => {
-      try {
-        const result = reportContradiction(belief_a_id, belief_b_id, explanation);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ belief_a_id, belief_b_id, explanation }) => {
+      const result = reportContradiction(belief_a_id, belief_b_id, explanation);
+      return toolOk(result);
+    }),
   );
 
   server.tool(
@@ -116,19 +86,10 @@ export function registerContradictionDetectorTools(server: McpServer): void {
       contradiction_id: z.string().describe("ID of the contradiction"),
       resolution: z.string().max(5000).describe("How the contradiction was resolved"),
     },
-    async ({ contradiction_id, resolution }) => {
-      try {
-        const contradiction = resolveContradiction(contradiction_id, resolution);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(contradiction, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ contradiction_id, resolution }) => {
+      const contradiction = resolveContradiction(contradiction_id, resolution);
+      return toolOk(contradiction);
+    }),
   );
 
   server.tool(
@@ -137,19 +98,10 @@ export function registerContradictionDetectorTools(server: McpServer): void {
     {
       contradiction_id: z.string().describe("ID of the contradiction to accept"),
     },
-    async ({ contradiction_id }) => {
-      try {
-        const contradiction = acceptContradiction(contradiction_id);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(contradiction, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ contradiction_id }) => {
+      const contradiction = acceptContradiction(contradiction_id);
+      return toolOk(contradiction);
+    }),
   );
 
   server.tool(
@@ -161,21 +113,10 @@ export function registerContradictionDetectorTools(server: McpServer): void {
         .default("unresolved")
         .describe("Filter by status (default: unresolved)"),
     },
-    async ({ status }) => {
+    wrapHandler(async ({ status }) => {
       const contradictionList = listContradictions(status);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              { count: contradictionList.length, contradictions: contradictionList },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({ count: contradictionList.length, contradictions: contradictionList });
+    }),
   );
 
   server.tool(
@@ -184,37 +125,19 @@ export function registerContradictionDetectorTools(server: McpServer): void {
     {
       belief_id: z.string().describe("ID of the belief to find potential contradictions for"),
     },
-    async ({ belief_id }) => {
-      try {
-        const candidates = findPotentialContradictions(belief_id);
-        const target = candidates.length > 0
-          ? { message: "Use belief_id to look up the target belief, then evaluate each candidate for semantic contradiction" }
-          : { message: "No same-domain candidates found" };
+    wrapHandler(async ({ belief_id }) => {
+      const candidates = findPotentialContradictions(belief_id);
+      const target = candidates.length > 0
+        ? { message: "Use belief_id to look up the target belief, then evaluate each candidate for semantic contradiction" }
+        : { message: "No same-domain candidates found" };
 
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  belief_id,
-                  candidate_count: candidates.length,
-                  note: "These are domain-overlap candidates — evaluate each for semantic contradiction",
-                  ...target,
-                  candidates,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+      return toolOk({
+        belief_id,
+        candidate_count: candidates.length,
+        note: "These are domain-overlap candidates — evaluate each for semantic contradiction",
+        ...target,
+        candidates,
+      });
+    }),
   );
 }

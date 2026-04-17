@@ -8,6 +8,7 @@ import {
   listAssumptions,
   getUntested,
 } from "./services.js";
+import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerAssumptionTrackerTools(server: McpServer): void {
   server.tool(
@@ -29,12 +30,10 @@ export function registerAssumptionTrackerTools(server: McpServer): void {
       source: z.string().max(500).optional().describe("Where this assumption comes from"),
       tags: z.array(z.string()).optional().describe("Tags for categorization"),
     },
-    async ({ statement, context, impact, confidence, source, tags }) => {
+    wrapHandler(async ({ statement, context, impact, confidence, source, tags }) => {
       const assumption = createAssumption(statement, context, impact, confidence, source, tags);
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(assumption, null, 2) }],
-      };
-    },
+      return toolOk(assumption);
+    }),
   );
 
   server.tool(
@@ -45,19 +44,10 @@ export function registerAssumptionTrackerTools(server: McpServer): void {
       evidence: z.string().max(5000).describe("Description of the test and what was found"),
       result: z.enum(["validated", "invalidated"]).describe("Test result"),
     },
-    async ({ assumption_id, evidence, result }) => {
-      try {
-        const assumption = testAssumption(assumption_id, evidence, result);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(assumption, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ assumption_id, evidence, result }) => {
+      const assumption = testAssumption(assumption_id, evidence, result);
+      return toolOk(assumption);
+    }),
   );
 
   server.tool(
@@ -72,26 +62,17 @@ export function registerAssumptionTrackerTools(server: McpServer): void {
       source: z.string().max(500).optional().describe("Updated source"),
       tags: z.array(z.string()).optional().describe("Updated tags"),
     },
-    async ({ assumption_id, statement, context, confidence, impact, source, tags }) => {
-      try {
-        const assumption = updateAssumption(assumption_id, {
-          statement,
-          context,
-          confidence,
-          impact,
-          source,
-          tags,
-        });
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(assumption, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ assumption_id, statement, context, confidence, impact, source, tags }) => {
+      const assumption = updateAssumption(assumption_id, {
+        statement,
+        context,
+        confidence,
+        impact,
+        source,
+        tags,
+      });
+      return toolOk(assumption);
+    }),
   );
 
   server.tool(
@@ -108,7 +89,7 @@ export function registerAssumptionTrackerTools(server: McpServer): void {
         .describe("Filter by impact level"),
       tags: z.array(z.string()).optional().describe("Filter by tags (any match)"),
     },
-    async ({ status, impact, tags }) => {
+    wrapHandler(async ({ status, impact, tags }) => {
       const assumptionList = listAssumptions(status, impact, tags);
 
       const counts = assumptionList.reduce<Record<string, number>>(
@@ -119,47 +100,25 @@ export function registerAssumptionTrackerTools(server: McpServer): void {
         {},
       );
 
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                total: assumptionList.length,
-                counts_by_status: counts,
-                assumptions: assumptionList,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        total: assumptionList.length,
+        counts_by_status: counts,
+        assumptions: assumptionList,
+      });
+    }),
   );
 
   server.tool(
     "assumption_get_untested",
     "Get all untested assumptions sorted by impact — answers 'What should I test next?'",
     {},
-    async () => {
+    wrapHandler(async () => {
       const untested = getUntested();
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: untested.length,
-                prompt: "What assumptions am I making that I haven't tested?",
-                untested_assumptions: untested,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
+      return toolOk({
+        count: untested.length,
+        prompt: "What assumptions am I making that I haven't tested?",
+        untested_assumptions: untested,
+      });
+    }),
   );
 }

@@ -7,6 +7,7 @@ import {
   getStats,
 } from "./services.js";
 import type { EntryType, Severity } from "./services.js";
+import { toolOk } from "../../utils/tool-response.js";
 
 export function registerLearningJournalTools(server: McpServer): void {
   server.tool(
@@ -36,9 +37,7 @@ export function registerLearningJournalTools(server: McpServer): void {
         severity as Severity,
         tags,
       );
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(entry, null, 2) }],
-      };
+      return toolOk(entry);
     },
   );
 
@@ -77,24 +76,13 @@ export function registerLearningJournalTools(server: McpServer): void {
         limit,
         offset,
       );
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                total_matching: result.total,
-                returned: result.entries.length,
-                offset,
-                limit,
-                entries: result.entries,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return toolOk({
+        total_matching: result.total,
+        returned: result.entries.length,
+        offset,
+        limit,
+        entries: result.entries,
+      });
     },
   );
 
@@ -106,32 +94,21 @@ export function registerLearningJournalTools(server: McpServer): void {
     },
     async ({ query }) => {
       const entries = searchEntries(query);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                query,
-                count: entries.length,
-                note: "All entries returned — evaluate semantic relevance to query",
-                entries: entries.map((e) => ({
-                  id: e.id,
-                  entry_type: e.entryType,
-                  title: e.title,
-                  content: e.content,
-                  lesson: e.lesson,
-                  severity: e.severity,
-                  tags: e.tags,
-                  created_at: e.createdAt,
-                })),
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return toolOk({
+        query,
+        count: entries.length,
+        note: "All entries returned — evaluate semantic relevance to query",
+        entries: entries.map((e) => ({
+          id: e.id,
+          entry_type: e.entryType,
+          title: e.title,
+          content: e.content,
+          lesson: e.lesson,
+          severity: e.severity,
+          tags: e.tags,
+          created_at: e.createdAt,
+        })),
+      });
     },
   );
 
@@ -141,14 +118,7 @@ export function registerLearningJournalTools(server: McpServer): void {
     {},
     async () => {
       const stats = getStats();
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(stats, null, 2),
-          },
-        ],
-      };
+      return toolOk(stats);
     },
   );
 }

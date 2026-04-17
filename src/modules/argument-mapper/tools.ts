@@ -9,6 +9,7 @@ import {
   completeArgument,
   challengeArgument,
 } from "./services.js";
+import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerArgumentMapperTools(server: McpServer): void {
   server.tool(
@@ -21,9 +22,7 @@ export function registerArgumentMapperTools(server: McpServer): void {
     },
     async ({ topic, conclusion, tags }) => {
       const argument = createArgument(topic, conclusion, tags);
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(argument, null, 2) }],
-      };
+      return toolOk(argument);
     },
   );
 
@@ -46,19 +45,10 @@ export function registerArgumentMapperTools(server: McpServer): void {
         .describe("Strength of this node (default: medium)"),
       source: z.string().max(500).optional().describe("Source or citation for this node"),
     },
-    async ({ argument_id, type, content, parent_node_id, strength, source }) => {
-      try {
-        const node = addNode(argument_id, type, content, parent_node_id, strength, source);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(node, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ argument_id, type, content, parent_node_id, strength, source }) => {
+      const node = addNode(argument_id, type, content, parent_node_id, strength, source);
+      return toolOk(node);
+    }),
   );
 
   server.tool(
@@ -70,19 +60,9 @@ export function registerArgumentMapperTools(server: McpServer): void {
     async ({ argument_id }) => {
       const result = getArgument(argument_id);
       if (!result) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ error: `Argument not found: ${argument_id}` }, null, 2),
-            },
-          ],
-          isError: true,
-        };
+        return toolErr("NOT_FOUND", `Argument not found: ${argument_id}`);
       }
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
-      };
+      return toolOk(result);
     },
   );
 
@@ -95,19 +75,10 @@ export function registerArgumentMapperTools(server: McpServer): void {
       conclusion: z.string().max(2000).optional().describe("Updated conclusion"),
       tags: z.array(z.string()).optional().describe("Updated tags"),
     },
-    async ({ argument_id, topic, conclusion, tags }) => {
-      try {
-        const argument = updateArgument(argument_id, { topic, conclusion, tags });
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(argument, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ argument_id, topic, conclusion, tags }) => {
+      const argument = updateArgument(argument_id, { topic, conclusion, tags });
+      return toolOk(argument);
+    }),
   );
 
   server.tool(
@@ -117,19 +88,10 @@ export function registerArgumentMapperTools(server: McpServer): void {
       argument_id: z.string().describe("ID of the argument"),
       conclusion: z.string().max(2000).describe("Final conclusion of the argument"),
     },
-    async ({ argument_id, conclusion }) => {
-      try {
-        const argument = completeArgument(argument_id, conclusion);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(argument, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ argument_id, conclusion }) => {
+      const argument = completeArgument(argument_id, conclusion);
+      return toolOk(argument);
+    }),
   );
 
   server.tool(
@@ -138,19 +100,10 @@ export function registerArgumentMapperTools(server: McpServer): void {
     {
       argument_id: z.string().describe("ID of the argument to challenge"),
     },
-    async ({ argument_id }) => {
-      try {
-        const argument = challengeArgument(argument_id);
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify(argument, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: String(err) }, null, 2) }],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ argument_id }) => {
+      const argument = challengeArgument(argument_id);
+      return toolOk(argument);
+    }),
   );
 
   server.tool(
@@ -165,18 +118,7 @@ export function registerArgumentMapperTools(server: McpServer): void {
     },
     async ({ status, tags }) => {
       const argumentList = listArguments(status, tags);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              { count: argumentList.length, arguments: argumentList },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return toolOk({ count: argumentList.length, arguments: argumentList });
     },
   );
 }

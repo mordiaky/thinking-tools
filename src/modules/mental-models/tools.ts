@@ -6,6 +6,7 @@ import {
   getCatalog,
 } from "./services.js";
 import { getAllModelNames } from "./catalog.js";
+import { toolOk, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerMentalModelTools(server: McpServer): void {
   server.tool(
@@ -36,37 +37,14 @@ export function registerMentalModelTools(server: McpServer): void {
         .optional()
         .describe("Optional tags for categorization"),
     },
-    async ({ model_name, problem, analysis, insights, tags }) => {
-      try {
-        const result = applyModel(model_name, problem, analysis, insights, tags);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(
-                {
-                  application: result.application,
-                  model_steps: result.model.steps,
-                  model_description: result.model.description,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
-      } catch (err) {
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ error: String(err) }, null, 2),
-            },
-          ],
-          isError: true,
-        };
-      }
-    },
+    wrapHandler(async ({ model_name, problem, analysis, insights, tags }) => {
+      const result = applyModel(model_name, problem, analysis, insights, tags);
+      return toolOk({
+        application: result.application,
+        model_steps: result.model.steps,
+        model_description: result.model.description,
+      });
+    }),
   );
 
   server.tool(
@@ -75,21 +53,10 @@ export function registerMentalModelTools(server: McpServer): void {
     {},
     async () => {
       const catalog = getCatalog();
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: catalog.length,
-                models: catalog,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return toolOk({
+        count: catalog.length,
+        models: catalog,
+      });
     },
   );
 
@@ -108,21 +75,10 @@ export function registerMentalModelTools(server: McpServer): void {
     },
     async ({ model_name, tags }) => {
       const applications = listApplications(model_name, tags);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify(
-              {
-                count: applications.length,
-                applications,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return toolOk({
+        count: applications.length,
+        applications,
+      });
     },
   );
 }
