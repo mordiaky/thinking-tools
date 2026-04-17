@@ -1,10 +1,10 @@
 # Thinking Tools MCP Server
 
-A unified MCP server suite for cognitive augmentation. 61 tools across 8 modules that make AI assistants significantly better at structured thinking, ideation, and decision-making.
+A unified MCP server suite for cognitive augmentation. 63 tools across 8 modules plus a cross-module integration layer that makes AI assistants significantly better at structured thinking, ideation, and decision-making.
 
 ## Why?
 
-AI agents are great at generating text but terrible at structured reasoning. They don't track what they've investigated, can't weigh evidence systematically, and forget their assumptions between sessions. Thinking Tools fixes this by giving agents persistent, structured cognitive tools that survive across conversations.
+AI agents are great at generating text but terrible at structured reasoning. They don't track what they've investigated, can't weigh evidence systematically, and forget their assumptions between sessions. Thinking Tools fixes this by giving agents persistent, structured cognitive tools that survive across conversations — and, crucially, wires those tools together so that promoting an idea automatically creates a hypothesis to track it, critique findings automatically become testable assumptions, and shortlists feed directly into decision matrices.
 
 ## Modules
 
@@ -12,14 +12,26 @@ AI agents are great at generating text but terrible at structured reasoning. The
 |--------|-------|-----------|-------------|
 | **Idea Lab** | 20 | [idea-lab-mcp](https://github.com/mordiaky/idea-lab-mcp) | Structured ideation pipeline — generate, score, critique, deduplicate, and store ideas |
 | **Hypothesis Tracker** | 6 | [hypothesis-tracker-mcp](https://github.com/mordiaky/hypothesis-tracker-mcp) | Evidence-based belief tracking with Bayesian confidence updates |
-| **Decision Matrix** | 8 | — | Weighted multi-criteria decisions with tradeoff analysis |
+| **Decision Matrix** | 9 | — | Weighted multi-criteria decisions, with one-step seeding from shortlisted ideas |
 | **Mental Models** | 3 | — | Apply 12 reasoning frameworks (first-principles, pre-mortem, inversion, etc.) |
 | **Assumption Tracker** | 5 | — | Surface, test, and resolve hidden assumptions |
 | **Contradiction Detector** | 8 | — | Find conflicting beliefs and statements across modules |
 | **Learning Journal** | 4 | — | Persistent mistake/insight log with pattern extraction |
 | **Argument Mapper** | 7 | — | Structured pro/con trees with strength ratings |
+| **Integrations (meta)** | 1 | — | `suggest_next_action` — scans state across every module and ranks what to work on next |
 
 > Individual modules are also available as standalone MCP servers if you only need one.
+
+## Cross-module wiring
+
+The modules are designed to compose. Out of the box:
+
+- **Promoting an idea to `shortlisted` or `build-next`** auto-creates a hypothesis seeded at the idea's composite score, so evidence accumulates against the idea over time.
+- **Critique findings** auto-spawn testable assumptions — fragile dependencies become high-impact assumptions, existing-product risks become critical-impact assumptions.
+- **`decision_create_from_shortlist`** seeds a decision matrix with every shortlisted idea as an option in one call.
+- **`suggest_next_action`** reads every module and tells you what to work on next (untested critical assumptions > unresolved contradictions > shortlists ready for decision > stale hypotheses > pipeline gaps).
+
+Integration failures never break the host tool call — they surface as an `integrationWarning` field in the response.
 
 ## Stack
 
@@ -95,6 +107,27 @@ The database is auto-created on first use. No setup required.
 3. Next session — pick up where you left off:
    hypothesis_list() → WS leak at 78%, DB at 22%
 ```
+
+## Example: Don't know what to work on next?
+
+```
+suggest_next_action()
+→ {
+    suggestions: [
+      { priority: 1, category: "untested_critical_assumption",
+        message: "Critical untested assumption: Users will choose this
+                  over existing alternatives: Notion, Roam",
+        recommendedTool: "assumption_test" },
+      { priority: 3, category: "shortlist_ready_for_decision",
+        message: "3 shortlisted ideas but no open decision.",
+        recommendedTool: "decision_create_from_shortlist" }
+    ],
+    stateSummary: { activeHypotheses: 4, untestedCritical: 2,
+                    shortlistedIdeas: 3, ... }
+  }
+```
+
+Pick one, do it, run `suggest_next_action` again.
 
 ## Development
 

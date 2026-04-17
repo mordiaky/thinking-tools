@@ -1,9 +1,28 @@
 {
   "name": "thinking-tools-mcp",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Unified MCP server suite for cognitive augmentation — idea lab, hypothesis tracking, decision matrices, mental models, and more",
   "type": "module",
   "main": "build/server.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mordiaky/thinking-tools.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mordiaky/thinking-tools/issues"
+  },
+  "homepage": "https://github.com/mordiaky/thinking-tools#readme",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "ai-agents",
+    "thinking-tools",
+    "ideation",
+    "hypothesis-tracking",
+    "decision-matrix",
+    "reasoning"
+  ],
   "scripts": {
     "dev": "tsx src/server.ts",
     "build": "tsc",
