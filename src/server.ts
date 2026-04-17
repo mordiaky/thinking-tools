@@ -8,6 +8,7 @@ import { registerAssumptionTrackerTools } from "./modules/assumption-tracker/too
 import { registerContradictionDetectorTools } from "./modules/contradiction-detector/tools.js";
 import { registerLearningJournalTools } from "./modules/learning-journal/tools.js";
 import { registerArgumentMapperTools } from "./modules/argument-mapper/tools.js";
+import { registerIntegrationTools } from "./modules/integrations/tools.js";
 
 const server = new McpServer({
   name: "thinking-tools",
@@ -22,6 +23,7 @@ registerAssumptionTrackerTools(server);
 registerContradictionDetectorTools(server);
 registerLearningJournalTools(server);
 registerArgumentMapperTools(server);
+registerIntegrationTools(server);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

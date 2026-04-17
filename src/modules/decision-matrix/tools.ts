@@ -10,6 +10,7 @@ import {
   listDecisions,
   decideOption,
 } from "./services.js";
+import { createDecisionFromShortlist } from "../integrations/services.js";
 import { toolOk, toolErr, wrapHandler } from "../../utils/tool-response.js";
 
 export function registerDecisionMatrixTools(server: McpServer): void {
@@ -134,6 +135,34 @@ export function registerDecisionMatrixTools(server: McpServer): void {
         return toolErr("NOT_FOUND", "Decision not found: " + decision_id);
       }
       return toolOk(detail);
+    }),
+  );
+
+  server.tool(
+    "decision_create_from_shortlist",
+    "Create a decision pre-seeded with shortlisted ideas as options. If idea_ids is omitted, every idea currently in 'shortlisted' status is used. After calling this, add criteria with decision_add_criterion, rate each option against each criterion with decision_rate, then call decision_evaluate.",
+    {
+      title: z.string().max(500).describe("Title of the decision (e.g., 'Which idea to build next?')"),
+      description: z.string().max(10000).optional().describe("Optional description of what's being decided"),
+      idea_ids: z
+        .array(z.string().uuid())
+        .optional()
+        .describe(
+          "Optional explicit list of idea UUIDs to include as options. Omit to use every idea with status 'shortlisted'.",
+        ),
+    },
+    wrapHandler(async ({ title, description, idea_ids }) => {
+      try {
+        const result = createDecisionFromShortlist(title, description, idea_ids);
+        return toolOk({
+          ...result,
+          nextStep:
+            "Add criteria with decision_add_criterion (e.g., speed-to-mvp, defensibility, personal-interest), then rate each option against each criterion with decision_rate, then call decision_evaluate.",
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return toolErr("INVALID_STATE", message);
+      }
     }),
   );
 }
