@@ -13,6 +13,13 @@ export function updateConfidence(
   evidenceType: "supporting" | "contradicting" | "neutral",
   weight: number,
 ): number {
+  if (prior < 0 || prior > 1) {
+    throw new Error(`prior must be between 0 and 1, got ${prior}`);
+  }
+  if (weight < 0 || weight > 1) {
+    throw new Error(`weight must be between 0 and 1, got ${weight}`);
+  }
+
   let newConfidence: number;
 
   switch (evidenceType) {

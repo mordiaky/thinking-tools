@@ -6,7 +6,8 @@ import type { Argument, ArgumentNode } from "../../db/schema.js";
 function parseTags(raw: string | null | undefined): string[] {
   try {
     return JSON.parse(raw ?? "[]");
-  } catch {
+  } catch (e) {
+    console.error("Failed to parse argument-mapper tags JSON:", e);
     return [];
   }
 }
@@ -185,7 +186,11 @@ export function updateNode(
 
   db.update(argumentNodes).set(setValues).where(eq(argumentNodes.id, nodeId)).run();
 
-  return db.select().from(argumentNodes).where(eq(argumentNodes.id, nodeId)).all()[0];
+  const updated = db.select().from(argumentNodes).where(eq(argumentNodes.id, nodeId)).all();
+  if (updated.length === 0) {
+    throw new Error(`Node not found after update: ${nodeId}`);
+  }
+  return updated[0];
 }
 
 export function listArguments(status?: string, tags?: string[]): ArgumentSummary[] {

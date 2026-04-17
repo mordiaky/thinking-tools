@@ -56,6 +56,10 @@ export function addCriterion(
   weight: number,
   description?: string,
 ): DecisionCriteria {
+  if (!Number.isFinite(weight) || weight <= 0) {
+    throw new Error(`weight must be a positive finite number, got ${weight}`);
+  }
+
   const dec = db.select().from(decisions).where(eq(decisions.id, decisionId)).all();
   if (dec.length === 0) {
     throw new Error(`Decision not found: ${decisionId}`);
@@ -243,5 +247,9 @@ export function decideOption(decisionId: string, optionId: string): Decision {
     .where(eq(decisions.id, decisionId))
     .run();
 
-  return db.select().from(decisions).where(eq(decisions.id, decisionId)).all()[0];
+  const result = db.select().from(decisions).where(eq(decisions.id, decisionId)).all();
+  if (result.length === 0) {
+    throw new Error(`Decision not found after update: ${decisionId}`);
+  }
+  return result[0];
 }

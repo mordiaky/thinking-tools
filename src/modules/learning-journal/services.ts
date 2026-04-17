@@ -9,7 +9,8 @@ export type Severity = "low" | "medium" | "high";
 function parseTags(raw: string | null | undefined): string[] {
   try {
     return JSON.parse(raw ?? "[]");
-  } catch {
+  } catch (e) {
+    console.error("Failed to parse learning-journal tags JSON:", e);
     return [];
   }
 }

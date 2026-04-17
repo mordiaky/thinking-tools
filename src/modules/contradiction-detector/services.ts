@@ -6,7 +6,8 @@ import type { Belief, Contradiction } from "../../db/schema.js";
 function parseTags(raw: string | null | undefined): string[] {
   try {
     return JSON.parse(raw ?? "[]");
-  } catch {
+  } catch (e) {
+    console.error("Failed to parse contradiction-detector tags JSON:", e);
     return [];
   }
 }
@@ -160,11 +161,15 @@ export function resolveContradiction(
     .where(eq(contradictions.id, contradictionId))
     .run();
 
-  return db
+  const updated = db
     .select()
     .from(contradictions)
     .where(eq(contradictions.id, contradictionId))
-    .all()[0];
+    .all();
+  if (updated.length === 0) {
+    throw new Error(`Contradiction not found after update: ${contradictionId}`);
+  }
+  return updated[0];
 }
 
 export function acceptContradiction(contradictionId: string): Contradiction {
@@ -186,11 +191,15 @@ export function acceptContradiction(contradictionId: string): Contradiction {
     .where(eq(contradictions.id, contradictionId))
     .run();
 
-  return db
+  const updated = db
     .select()
     .from(contradictions)
     .where(eq(contradictions.id, contradictionId))
-    .all()[0];
+    .all();
+  if (updated.length === 0) {
+    throw new Error(`Contradiction not found after update: ${contradictionId}`);
+  }
+  return updated[0];
 }
 
 export function listContradictions(status?: string): ContradictionWithBeliefs[] {

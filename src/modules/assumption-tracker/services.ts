@@ -13,7 +13,8 @@ const IMPACT_ORDER: Record<string, number> = {
 function parseTags(raw: string | null | undefined): string[] {
   try {
     return JSON.parse(raw ?? "[]");
-  } catch {
+  } catch (e) {
+    console.error("Failed to parse assumption-tracker tags JSON:", e);
     return [];
   }
 }

@@ -32,7 +32,8 @@ function rowToHypothesis(row: typeof hypotheses.$inferSelect): HypothesisRecord 
   let tags: string[];
   try {
     tags = JSON.parse(row.tags ?? "[]");
-  } catch {
+  } catch (e) {
+    console.error("Failed to parse hypothesis tags JSON:", e);
     tags = [];
   }
   return {
@@ -58,28 +59,36 @@ export function createHypothesis(
   tags?: string[],
   context?: string,
 ): HypothesisRecord {
+  if (initialConfidence < 0 || initialConfidence > 1) {
+    throw new Error(`initialConfidence must be between 0 and 1, got ${initialConfidence}`);
+  }
+
   const id = generateId();
   const timestamp = now();
 
-  db.insert(hypotheses).values({
-    id,
-    title,
-    description,
-    confidence: initialConfidence,
-    status: "active",
-    tags: JSON.stringify(tags ?? []),
-    context: context ?? null,
-    createdAt: timestamp,
-    updatedAt: timestamp,
-  }).run();
+  const insertHypothesis = sqlite.transaction(() => {
+    db.insert(hypotheses).values({
+      id,
+      title,
+      description,
+      confidence: initialConfidence,
+      status: "active",
+      tags: JSON.stringify(tags ?? []),
+      context: context ?? null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }).run();
 
-  db.insert(confidenceHistory).values({
-    id: generateHistoryId(),
-    hypothesisId: id,
-    confidence: initialConfidence,
-    reason: "Initial confidence set at creation",
-    createdAt: timestamp,
-  }).run();
+    db.insert(confidenceHistory).values({
+      id: generateHistoryId(),
+      hypothesisId: id,
+      confidence: initialConfidence,
+      reason: "Initial confidence set at creation",
+      createdAt: timestamp,
+    }).run();
+  });
+
+  insertHypothesis();
 
   return getHypothesis(id)!;
 }
@@ -189,7 +198,8 @@ export function listHypotheses(
     throw new Error(`Invalid sort field: ${sortBy}`);
   }
 
-  const whereClause = status !== "all" ? `WHERE h.status = '${status}'` : "";
+  const whereClause = status !== "all" ? `WHERE h.status = ?` : "";
+  const params = status !== "all" ? [status] : [];
 
   const rows = sqlite.prepare(`
     SELECT h.*,
@@ -201,13 +211,14 @@ export function listHypotheses(
     ${whereClause}
     GROUP BY h.id
     ORDER BY ${orderClause}
-  `).all() as Array<Record<string, unknown>>;
+  `).all(...params) as Array<Record<string, unknown>>;
 
   let results: HypothesisWithCounts[] = rows.map((row) => {
     let parsedTags: string[];
     try {
       parsedTags = JSON.parse(row.tags as string);
-    } catch {
+    } catch (e) {
+      console.error("Failed to parse hypothesis tags JSON:", e);
       parsedTags = [];
     }
     return {
